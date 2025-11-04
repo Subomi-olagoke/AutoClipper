@@ -61,7 +61,7 @@ services:
           name: autoclipper-redis
           property: connectionString
 
-databases:
-  - name: autoclipper-redis
+  - type: redis
+    name: autoclipper-redis
     plan: free
     region: oregon
