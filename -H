@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>TypeError: Cannot destructure property &#39;clip_id&#39; of &#39;req.body&#39; as it is undefined.<br> &nbsp; &nbsp;at saveClip (file:///Users/owedeharrison/Desktop/AutoClipper/src/controllers/clipsController.js:16:11)<br> &nbsp; &nbsp;at Layer.handleRequest (/Users/owedeharrison/Desktop/AutoClipper/node_modules/router/lib/layer.js:152:17)<br> &nbsp; &nbsp;at next (/Users/owedeharrison/Desktop/AutoClipper/node_modules/router/lib/route.js:157:13)<br> &nbsp; &nbsp;at Route.dispatch (/Users/owedeharrison/Desktop/AutoClipper/node_modules/router/lib/route.js:117:3)<br> &nbsp; &nbsp;at handle (/Users/owedeharrison/Desktop/AutoClipper/node_modules/router/index.js:435:11)<br> &nbsp; &nbsp;at Layer.handleRequest (/Users/owedeharrison/Desktop/AutoClipper/node_modules/router/lib/layer.js:152:17)<br> &nbsp; &nbsp;at /Users/owedeharrison/Desktop/AutoClipper/node_modules/router/index.js:295:15<br> &nbsp; &nbsp;at processParams (/Users/owedeharrison/Desktop/AutoClipper/node_modules/router/index.js:582:12)<br> &nbsp; &nbsp;at next (/Users/owedeharrison/Desktop/AutoClipper/node_modules/router/index.js:291:5)<br> &nbsp; &nbsp;at Function.handle (/Users/owedeharrison/Desktop/AutoClipper/node_modules/router/index.js:186:3)</pre>
+</body>
+</html>

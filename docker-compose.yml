@@ -1,0 +1,32 @@
+version: '3.8'
+services:
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+  mongo:
+    image: mongo:6
+    ports: ["27017:27017"]
+    volumes:
+      - mongo-data:/data/db
+  api:
+    build: .
+    environment:
+      - PORT=3000
+      - MONGODB_URI=mongodb://mongo:27017/autoclipper
+      - REDIS_URL=redis://redis:6379
+      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID}
+      - TWITCH_CLIENT_SECRET=${TWITCH_CLIENT_SECRET}
+      # DO NOT PUT TOKENS HERE IN GIT; in local use .env
+    ports:
+      - "3000:3000"
+    depends_on: [redis, mongo]
+  worker:
+    build: .
+    command: node src/jobs/clipQueueWorker.js
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - MONGODB_URI=mongodb://mongo:27017/autoclipper
+    depends_on: [redis, mongo]
+
+volumes:
+  mongo-data:
