@@ -1,36 +1,34 @@
 import Clip from "../models/clipModel.js";
-import { captureClip } from "../utils/ffmpegHandler.js";
 import { clipQueue } from "../jobs/clipQueue.js";
 
-// ✅ Get all saved clips
+
+// GET all clips
 export const getClips = async (req, res) => {
   try {
     const clips = await Clip.find().sort({ createdAt: -1 });
     res.json(clips);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Failed to fetch clips" });
   }
 };
 
-// ✅ Create a new clip (Twitch or YouTube)
+// CREATE clip job
 export const createClip = async (req, res) => {
   try {
     const { m3u8Url, title } = req.body;
+
     if (!m3u8Url || !title) {
-      return res.status(400).json({ error: "m3u8Url and title are required" });
+      return res.status(400).json({ error: "Missing URL or title" });
     }
 
-    console.log(`🎬 Creating clip for: ${m3u8Url}`);
-    const filePath = await captureClip(m3u8Url, "./buffer");
+    // Enqueue job with 'url' instead of 'm3u8Url'
+    await clipQueue.add({ url: m3u8Url, title });
 
-    await clipQueue.add({ filePath, title, channel: title });
-
-    res.status(201).json({
-      message: "Clip creation started, uploading in background...",
-      filePath,
-    });
-  } catch (error) {
-    console.error("❌ Error in createClip:", error.message);
-    res.status(500).json({ error: error.message });
+    console.log(`🎬 Queued new clip: ${title}`);
+    res.json({ message: "Clip queued successfully!" });
+  } catch (err) {
+    console.error("❌ Error queueing clip:", err.message);
+    res.status(500).json({ error: "Failed to queue clip" });
   }
 };
+
