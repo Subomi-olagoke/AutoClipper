@@ -29,6 +29,7 @@ services:
         fromService:
           type: redis
           name: autoclipper-redis
+          property: connectionString
 
   - type: worker
     name: autoclipper-worker
@@ -58,6 +59,7 @@ services:
         fromService:
           type: redis
           name: autoclipper-redis
+          property: connectionString
 
 databases:
   - name: autoclipper-redis
