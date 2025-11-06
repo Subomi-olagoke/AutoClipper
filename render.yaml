@@ -26,10 +26,7 @@ services:
       - key: TWITCH_REFRESH_TOKEN
         sync: false
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: autoclipper-redis
-          property: connectionString
+        value: rediss://default:fwDinaCgcsR1jCpErUZCZu9p8RUvpa58@redis-13997.c1.us-west-2-2.ec2.redns.redis-cloud.com:13997
 
   - type: worker
     name: autoclipper-worker
@@ -56,15 +53,4 @@ services:
       - key: TWITCH_REFRESH_TOKEN
         sync: false
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: autoclipper-redis
-          property: connectionString
-
-  - type: redis
-    name: autoclipper-redis
-    plan: free
-    region: oregon
-    ipAllowList:
-      - source: 0.0.0.0/0
-        description: Allow all
+        value: rediss://default:fwDinaCgcsR1jCpErUZCZu9p8RUvpa58@redis-13997.c1.us-west-2-2.ec2.redns.redis-cloud.com:13997
