@@ -5,13 +5,16 @@ let redisClient;
 export const connectRedis = async () => {
   const redisUrl = process.env.REDIS_URL;
 
-  // Connect WITHOUT TLS (your Redis Cloud instance uses redis://, not rediss://)
+  if (!redisUrl) {
+    throw new Error("❌ Missing REDIS_URL environment variable");
+  }
+
   redisClient = createClient({
     url: redisUrl,
     socket: {
-      tls: false, // ❌ Disable SSL/TLS
-      connectTimeout: 5000,
-    },
+      tls: true,                // ✅ required for Upstash
+      rejectUnauthorized: false // ✅ avoids TLS cert issues
+    }
   });
 
   redisClient.on("error", (err) => console.error("❌ Redis connection error:", err));
@@ -19,6 +22,12 @@ export const connectRedis = async () => {
   redisClient.on("ready", () => console.log("🚀 Redis ready"));
 
   await redisClient.connect();
+
+  // Optional quick test
+  await redisClient.set("testKey", "Hello from Upstash!");
+  const value = await redisClient.get("testKey");
+  console.log("📦 Redis test value:", value);
+
   return redisClient;
 };
 
@@ -28,3 +37,23 @@ export const getRedisClient = () => {
   }
   return redisClient;
 };
+
+
+
+// 👇 Add this test block to run directly
+if (process.argv[1].includes("redis.js")) {
+  (async () => {
+    try {
+      console.log("🧩 Testing Redis connection...");
+      const client = await connectRedis();
+      await client.set("testKey", "Hello from Upstash!");
+      const value = await client.get("testKey");
+      console.log("📦 Redis test value:", value);
+      await client.quit();
+      console.log("✅ Test complete, connection closed.");
+    } catch (err) {
+      console.error("❌ Redis test failed:", err);
+    }
+  })();
+}
+
