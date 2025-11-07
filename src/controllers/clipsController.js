@@ -21,14 +21,21 @@ export const createClip = async (req, res) => {
       return res.status(400).json({ error: "Missing URL or title" });
     }
 
-    // Enqueue job with 'url' instead of 'm3u8Url'
+    console.log("📥 Received request:", { m3u8Url, title });
+
+    // ⬇️ Debug: Before adding to queue
+    console.log("🕐 Adding to clipQueue...");
+
     await clipQueue.add({ url: m3u8Url, title });
 
+    // ⬇️ Debug: After adding to queue
     console.log(`🎬 Queued new clip: ${title}`);
-    res.json({ message: "Clip queued successfully!" });
+
+    return res.json({ message: "Clip queued successfully!" });
   } catch (err) {
-    console.error("❌ Error queueing clip:", err.message);
-    res.status(500).json({ error: "Failed to queue clip" });
+    console.error("❌ Error queueing clip:", err);
+    return res.status(500).json({ error: err.message });
   }
 };
+
 
