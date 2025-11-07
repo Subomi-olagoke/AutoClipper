@@ -1,17 +1,26 @@
 import Queue from "bull";
 
-const redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
-const isCloud = redisUrl.startsWith("rediss://");
+const redisUrl = process.env.REDIS_URL;
+const isCloud = redisUrl?.startsWith("rediss://");
 
-// 🧠 Disable the Bull internal ready check and retry system for Upstash
 export const clipQueue = new Queue("clipQueue", {
   redis: {
     url: redisUrl,
     tls: isCloud ? {} : undefined,
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
+    connectTimeout: 30000, // 30 seconds timeout to avoid hanging
+  },
+  defaultJobOptions: {
+    removeOnComplete: true,
+    removeOnFail: true,
   },
 });
+
+clipQueue.on("ready", () => console.log("🚀 Bull queue ready and connected"));
+clipQueue.on("error", (err) =>
+  console.error("❌ Bull queue connection error:", err.message)
+);
 
 console.log(
   isCloud
