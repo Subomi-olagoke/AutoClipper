@@ -25,7 +25,7 @@ export const captureClip = async (url, outputDir, duration = 10) => {
   // 🔴 YouTube
   else if (url.includes("youtube.com") || url.includes("youtu.be")) {
     console.log("🎯 Getting real stream URL for YouTube...");
-    const info = await youtubedl(url, { dumpSingleJson: true });
+    const info = await youtubedl(url, { dumpSingleJson: true, cookies: "cookies.txt", });
 
     // 🧠 Accept multiple stream types (not only HLS)
     const formats = info.formats.filter(
@@ -74,8 +74,14 @@ export const captureClip = async (url, outputDir, duration = 10) => {
 
   return new Promise((resolve, reject) => {
     ffmpeg(realUrl)
+      .inputOptions(["-ss 00:00:00"]) // start time
       .setDuration(duration)
-      .outputOptions(["-c copy"])
+      .outputOptions([
+        "-c copy",
+        "-threads 1",      // limit CPU
+        "-bufsize 1M",     // buffer limit
+        "-maxrate 1M",     // limit bandwidth
+      ])
       .output(outputFile)
       .on("end", () => {
         console.log(`✅ Clip saved locally: ${outputFile}`);
