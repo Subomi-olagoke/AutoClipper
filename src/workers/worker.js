@@ -8,7 +8,7 @@ import { captureClip } from "../utils/ffmpegHandler.js";
 import Clip from "../models/clipModel.js";
 import mongoose from "mongoose";
 import "../config/db.js";
-import "../config/redis.js";
+
 
 dotenv.config();
 

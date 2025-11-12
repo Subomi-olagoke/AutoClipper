@@ -26,4 +26,25 @@ services:
       - key: TWITCH_REFRESH_TOKEN
         sync: false
       - key: REDIS_URL
-        value: rediss://default:fwDinaCgcsR1jCpErUZCZu9p8RUvpa58@redis-13997.c1.us-west-2-2.ec2.redns.redis-cloud.com:13997
+        sync: false
+
+  - type: worker
+    name: autoclipper-worker
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: node src/workers/worker.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: REDIS_URL
+        sync: false

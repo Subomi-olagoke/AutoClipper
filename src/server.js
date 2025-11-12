@@ -9,7 +9,7 @@ import { verifyTwitchAuth } from "./config/twitch.js";
 import { getTwitchToken, refreshTwitchToken } from "./utils/twitchTokenManager.js";
 import streamRoutes from "./routes/streamRoutes.js";
 import devRoutes from "./routes/devRoutes.js";
-import './workers/worker.js';
+import { clipQueue } from "./jobs/clipQueue.js";
 
 
 
@@ -23,6 +23,8 @@ app.use(express.json());
 app.use("/videos", express.static(path.join(process.cwd(), "public/videos")));
 
 
+clipQueue.on("ready", () => console.log("✅ API connected to Redis queue"));
+clipQueue.on("error", (err) => console.error("❌ Redis error:", err.message));
 
 
 
