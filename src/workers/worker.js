@@ -1,8 +1,6 @@
 // src/workers/worker.js
 import dotenv from "dotenv";
 import { v2 as cloudinary } from "cloudinary";
-import fs from "fs";
-import path from "path";
 import mongoose from "mongoose";
 import axios from "axios";
 import { clipQueue } from "../jobs/clipQueue.js";
@@ -34,13 +32,13 @@ async function processClip(jobData) {
     console.log(`🎬 Processing Cloudinary clip for: ${title}`);
     console.log("🔗 Stream URL:", url);
 
-    // Cloudinary trims directly from the remote URL
+    // Remove invalid crop: "trim"
     const uploadResult = await cloudinary.uploader.upload(url, {
       resource_type: "video",
       folder: "autoclipper_clips",
       public_id: title.replace(/\s+/g, "_"),
       transformation: [
-        { start_offset: `${startTime}s`, duration: `${duration}s`, crop: "trim" },
+        { start_offset: startTime, end_offset: startTime + duration }, // trim correctly
         { fetch_format: "mp4" },
       ],
     });
@@ -64,10 +62,16 @@ async function processClip(jobData) {
 // --- Clip queue processor ---
 clipQueue.process("clip", async (job) => {
   console.log(`📦 New job received: ${job.name}`, job.data);
-  const result = await processClip(job.data);
-  return result;
+  return await processClip(job.data);
 });
 
+// --- AutoClip processor ---
+clipQueue.process("autoClip", async (job) => {
+  console.log(`📦 AutoClip job received: ${job.name}`, job.data);
+  return await processClip(job.data);
+});
+
+// --- Queue events ---
 clipQueue.on("completed", (job, result) => {
   console.log(`✅ Job ${job.id} completed → ${result}`);
 });
@@ -79,7 +83,9 @@ clipQueue.on("failed", (job, err) => {
 // --- Optional: auto-trigger when spike detected ---
 setInterval(async () => {
   try {
-    const { data } = await axios.get("https://autoclipper-8.onrender.com/api/comments/spike");
+    const { data } = await axios.get(
+      "https://autoclipper-8.onrender.com/api/comments/spike"
+    );
     const { currentComments, baselineComments, streamUrl } = data;
 
     if (currentComments >= baselineComments * 5) {
@@ -96,4 +102,3 @@ setInterval(async () => {
     console.error("⚠️ Spike check failed:", err.message);
   }
 }, 60_000);
-
