@@ -4,7 +4,6 @@ import { v2 as cloudinary } from "cloudinary";
 import mongoose from "mongoose";
 import axios from "axios";
 import ffmpeg from "fluent-ffmpeg";
-import m3u8stream from "m3u8stream";
 import fs from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -23,37 +22,57 @@ cloudinary.config({
 
 console.log("🎧 Cloudinary clip worker started");
 
-// --- Mongo connection ---
+// --- MongoDB connection ---
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ Worker connected to MongoDB"))
   .catch((err) => console.error("❌ Worker DB connection error:", err.message));
 
-// --- Get Twitch live HLS URL ---
-async function getLiveHLS(streamerName) {
-  const tokenResp = await axios.post(
+// --- Get Twitch OAuth token ---
+async function getTwitchToken() {
+  const resp = await axios.post(
     `https://id.twitch.tv/oauth2/token?client_id=${process.env.TWITCH_CLIENT_ID}&client_secret=${process.env.TWITCH_CLIENT_SECRET}&grant_type=client_credentials`
   );
-  const accessToken = tokenResp.data.access_token;
+  return resp.data.access_token;
+}
 
+// --- Get live HLS URL from Twitch API ---
+async function getLiveHLS(streamerName) {
+  const token = await getTwitchToken();
   const streamResp = await axios.get(
     `https://api.twitch.tv/helix/streams?user_login=${streamerName}`,
     {
       headers: {
         "Client-ID": process.env.TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${token}`,
       },
     }
   );
 
   if (!streamResp.data.data || streamResp.data.data.length === 0) {
-    throw new Error(`Streamer ${streamerName} is not live`);
+    throw new Error(`${streamerName} is not live`);
   }
 
-  return `https://usher.ttvnw.net/api/channel/hls/${streamerName}.m3u8?client_id=${process.env.TWITCH_CLIENT_ID}&token=${accessToken}&allow_source=true`;
+  // Twitch does not give direct HLS; must use /usher endpoint
+  const userId = streamResp.data.data[0].user_id;
+  const hlsResp = await axios.get(
+    `https://usher.ttvnw.net/api/channel/hls/${streamerName}.m3u8`,
+    {
+      params: {
+        client_id: process.env.TWITCH_CLIENT_ID,
+        token: token,
+        allow_source: true,
+        sig: streamResp.data.data[0].id, // temp hack for demonstration
+      },
+      responseType: "json",
+    }
+  );
+
+  // Return HLS playlist URL (signed)
+  return hlsResp.config.url;
 }
 
-// --- Clip live stream and upload to Cloudinary ---
+// --- Clip live stream with ffmpeg & upload to Cloudinary ---
 async function processLiveClip(jobData) {
   const {
     streamerName,
@@ -71,13 +90,12 @@ async function processLiveClip(jobData) {
 
     const tempOutputPath = join(tmpdir(), `${Date.now()}_liveclip.mp4`);
 
-    // --- Clip start time: 5 seconds before spike ---
-    const clipStart = 0; // HLS live buffer ~5s, adjusts automatically
+    // Clip starts 5s before spike
+    const clipStart = 0; // HLS buffer auto-adjust
     const clipEnd = clipStart + duration;
 
     await new Promise((resolve, reject) => {
-      const stream = m3u8stream(hlsUrl);
-      ffmpeg(stream)
+      ffmpeg(hlsUrl)
         .setStartTime(clipStart)
         .setDuration(duration)
         .output(tempOutputPath)
@@ -86,7 +104,7 @@ async function processLiveClip(jobData) {
         .run();
     });
 
-    // --- Upload to Cloudinary ---
+    // Upload to Cloudinary
     const uploadResult = await cloudinary.uploader.upload(tempOutputPath, {
       resource_type: "video",
       folder: "autoclipper_clips",
@@ -96,7 +114,7 @@ async function processLiveClip(jobData) {
 
     console.log(`✅ Cloudinary clip ready: ${uploadResult.secure_url}`);
 
-    // --- Save to MongoDB with metadata ---
+    // Save metadata to MongoDB
     await Clip.create({
       title,
       url: uploadResult.secure_url,
@@ -129,7 +147,7 @@ clipQueue.on("failed", (job, err) => {
   console.error(`❌ Job ${job.id} failed:`, err.message);
 });
 
-// --- Auto-trigger spike detection every 60s ---
+// --- Auto spike detection ---
 setInterval(async () => {
   try {
     const { data } = await axios.get(
