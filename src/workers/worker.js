@@ -1,7 +1,7 @@
+// src/workers/worker.js
 import dotenv from "dotenv";
 import { v2 as cloudinary } from "cloudinary";
 import mongoose from "mongoose";
-import { clipQueue } from "../jobs/clipQueue.js";
 import Clip from "../models/clipModel.js";
 import "../config/db.js";
 import { tmpdir } from "os";
@@ -9,10 +9,39 @@ import { join } from "path";
 import fs from "fs";
 import { exec } from "child_process";
 import axios from "axios";
+import Queue from "bull";
+import Redis from "ioredis";
 
 dotenv.config();
 
+// ---------------------------
+// Worker-specific Redis queue
+// ---------------------------
+const redisWorkerClient = new Redis(process.env.REDIS_URL, {
+  tls: {},
+  enableReadyCheck: false,
+  maxRetriesPerRequest: null,
+});
+
+export const clipQueue = new Queue("clipQueue", {
+  createClient: function (type) {
+    switch (type) {
+      case "client":
+        return redisWorkerClient;
+      case "subscriber":
+        return new Redis(process.env.REDIS_URL, { tls: {}, enableReadyCheck: false, maxRetriesPerRequest: null });
+      default:
+        return new Redis(process.env.REDIS_URL, { tls: {}, enableReadyCheck: false, maxRetriesPerRequest: null });
+    }
+  },
+});
+
+clipQueue.on("ready", () => console.log("🚀 Bull queue (worker) ready"));
+clipQueue.on("error", (err) => console.error("❌ Bull queue (worker) error:", err.message));
+
+// ---------------------------
 // Cloudinary setup
+// ---------------------------
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -21,20 +50,24 @@ cloudinary.config({
 
 console.log("🎧 Streamlink clip worker started");
 
+// ---------------------------
 // MongoDB connection
+// ---------------------------
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ Worker connected to MongoDB"))
   .catch((err) => console.error("❌ Worker DB connection error:", err.message));
 
+// ---------------------------
+// Clip processing function
+// ---------------------------
 async function processLiveClip(jobData) {
   const { streamerLogin, title, duration = 15, spikeComments, baselineComments } = jobData;
   const safeStreamer = streamerLogin || "example_streamer";
-
   const tempPath = join(tmpdir(), `${Date.now()}_clip.mp4`);
 
-  // Check if streamlink is available
   try {
+    // Check streamlink CLI
     await new Promise((resolve, reject) => {
       exec("which streamlink", (err, stdout) => {
         if (err || !stdout) reject(new Error("Streamlink CLI not installed"));
@@ -44,7 +77,6 @@ async function processLiveClip(jobData) {
 
     // Record clip
     const cmd = `streamlink --stdout https://twitch.tv/${safeStreamer} best | ffmpeg -y -i - -t ${duration} -c copy "${tempPath}"`;
-
     await new Promise((resolve, reject) => {
       exec(cmd, (err, stdout, stderr) => {
         if (err) return reject(new Error(stderr || err.message));
@@ -83,17 +115,20 @@ async function processLiveClip(jobData) {
   }
 }
 
+// ---------------------------
 // Queue processors
+// ---------------------------
 clipQueue.process("clip", async (job) => processLiveClip(job.data));
 clipQueue.process("autoClip", async (job) => processLiveClip(job.data));
 
 clipQueue.on("completed", (job, result) => console.log(`✅ Job ${job.id} completed → ${result}`));
 clipQueue.on("failed", (job, err) => console.error(`❌ Job ${job.id} failed:`, err.message));
 
-// Base backend URL (set in Render env vars)
-const BASE_URL = process.env.BACKEND_URL || "https://autoclipper-8.onrender.com";
+// ---------------------------
+// Auto spike detection
+// ---------------------------
+const BASE_URL = process.env.BACKEND_URL || "https://autoclipper-shb4.onrender.com";
 
-// --- Auto spike detection ---
 setInterval(async () => {
   try {
     const url = `${BASE_URL}/api/spike`;
@@ -122,4 +157,4 @@ setInterval(async () => {
   } catch (err) {
     console.error("⚠️ Spike check failed:", err.message);
   }
-}, 60_000); // check every 60s (you can lower to 5_000 for testing)
+}, 60_000); // every 60s
