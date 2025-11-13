@@ -1,63 +1,96 @@
 // src/workers/worker.js
 import dotenv from "dotenv";
+import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
 import path from "path";
-import { v2 as cloudinary } from "cloudinary";
-import { clipQueue } from "../jobs/clipQueue.js";
-import { captureClip } from "../utils/ffmpegHandler.js";
-import Clip from "../models/clipModel.js";
 import mongoose from "mongoose";
+import axios from "axios";
+import { clipQueue } from "../jobs/clipQueue.js";
+import Clip from "../models/clipModel.js";
 import "../config/db.js";
-
 
 dotenv.config();
 
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => console.log("✅ Worker connected to MongoDB"))
-  .catch((err) => console.error("❌ Worker DB connection error:", err.message));
-
+// --- Cloudinary setup ---
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-console.log("🎧 Clip worker started");
+console.log("🎧 Cloudinary clip worker started");
 
-clipQueue.process(async (job) => {
-  const { url, title, duration } = job.data;
-  console.log(`🎥 Processing clip for: ${title}`);
-  console.log("🔗 Stream URL received:", url);
+// --- Mongo connection ---
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => console.log("✅ Worker connected to MongoDB"))
+  .catch((err) => console.error("❌ Worker DB connection error:", err.message));
+
+// --- Cloudinary-based clip processor ---
+async function processClip(jobData) {
+  const { url, title, duration = 15, startTime = 0 } = jobData;
 
   try {
-    const outputDir = path.join(process.cwd(), "clips");
-    const clipPath = await captureClip(url, outputDir, duration || 10);
+    console.log(`🎬 Processing Cloudinary clip for: ${title}`);
+    console.log("🔗 Stream URL:", url);
 
-    console.log("🧾 Returned clip path:", clipPath);
-
-    if (!clipPath || !fs.existsSync(clipPath)) {
-      console.error("⚠️ Clip file not found or path invalid:", clipPath);
-      throw new Error("Clip path missing or file not found");
-    }
-
-    console.log(`☁️ Uploading to Cloudinary from: ${clipPath}`);
-    const uploadResult = await cloudinary.uploader.upload(clipPath, {
+    // Cloudinary trims directly from the remote URL
+    const uploadResult = await cloudinary.uploader.upload(url, {
       resource_type: "video",
       folder: "autoclipper_clips",
+      public_id: title.replace(/\s+/g, "_"),
+      transformation: [
+        { start_offset: `${startTime}s`, duration: `${duration}s`, crop: "trim" },
+        { fetch_format: "mp4" },
+      ],
     });
 
-    console.log("✅ Upload successful:", uploadResult.secure_url);
+    console.log(`✅ Cloudinary clip ready: ${uploadResult.secure_url}`);
 
     await Clip.create({
       title,
       url: uploadResult.secure_url,
+      sourceUrl: url,
       createdAt: new Date(),
     });
 
     return uploadResult.secure_url;
   } catch (err) {
-    console.error("❌ Worker error:", err.message);
+    console.error("❌ Cloudinary clip error:", err.message);
     throw err;
   }
+}
+
+// --- Clip queue processor ---
+clipQueue.process(async (job) => {
+  console.log(`📦 New job received: ${job.name}`, job.data);
+  const result = await processClip(job.data);
+  return result;
 });
+
+clipQueue.on("completed", (job, result) => {
+  console.log(`✅ Job ${job.id} completed → ${result}`);
+});
+
+clipQueue.on("failed", (job, err) => {
+  console.error(`❌ Job ${job.id} failed:`, err.message);
+});
+
+// --- Optional: auto-trigger when spike detected ---
+setInterval(async () => {
+  try {
+    const { data } = await axios.get("https://your-spike-endpoint.onrender.com/api/spike");
+    const { currentComments, baselineComments, streamUrl } = data;
+
+    if (currentComments >= baselineComments * 5) {
+      console.log("🔥 Spike detected (x5 comments)! Queuing new clip...");
+      await clipQueue.add("autoClip", {
+        url: streamUrl,
+        title: `AutoClip-${Date.now()}`,
+        duration: 15,
+      });
+    }
+  } catch (err) {
+    console.error("⚠️ Spike check failed:", err.message);
+  }
+}, 60_000);
