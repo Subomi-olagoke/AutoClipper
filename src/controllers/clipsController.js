@@ -26,7 +26,7 @@ export const createClip = async (req, res) => {
     // ⬇️ Debug: Before adding to queue
     console.log("🕐 Adding to clipQueue...");
 
-    await clipQueue.add({ url: m3u8Url, title });
+    await clipQueue.add("clip", { m3u8Url, title });
 
     // ⬇️ Debug: After adding to queue
     console.log(`🎬 Queued new clip: ${title}`);

@@ -62,7 +62,7 @@ async function processClip(jobData) {
 }
 
 // --- Clip queue processor ---
-clipQueue.process(async (job) => {
+clipQueue.process("clip", async (job) => {
   console.log(`📦 New job received: ${job.name}`, job.data);
   const result = await processClip(job.data);
   return result;
@@ -79,7 +79,7 @@ clipQueue.on("failed", (job, err) => {
 // --- Optional: auto-trigger when spike detected ---
 setInterval(async () => {
   try {
-    const { data } = await axios.get("https://your-spike-endpoint.onrender.com/api/spike");
+    const { data } = await axios.get("https://autoclipper-8.onrender.com/api/comments/spike");
     const { currentComments, baselineComments, streamUrl } = data;
 
     if (currentComments >= baselineComments * 5) {
@@ -89,8 +89,11 @@ setInterval(async () => {
         title: `AutoClip-${Date.now()}`,
         duration: 15,
       });
+    } else {
+      console.log(`📊 No spike yet: ${currentComments}/${baselineComments * 5}`);
     }
   } catch (err) {
     console.error("⚠️ Spike check failed:", err.message);
   }
 }, 60_000);
+
