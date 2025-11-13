@@ -2,7 +2,7 @@
 import dotenv from "dotenv";
 import { v2 as cloudinary } from "cloudinary";
 import mongoose from "mongoose";
-import Clip from "./models/clipModel.js";
+import Clip from "../models/clipModel.js";
 import "../config/db.js"; // your main DB connection
 import { tmpdir } from "os";
 import { join } from "path";
