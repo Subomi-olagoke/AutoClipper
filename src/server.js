@@ -50,7 +50,10 @@ await connectRedis();
 // Verify Twitch credentials once at startup
 await verifyTwitchAuth();
 // Start chat listener for your streamer
+
+await getTwitchToken(); 
 startChatListener(process.env.STREAMER_LOGIN);
+
 
 // 🔁 Auto-refresh Twitch token continuously every 50 minutes
 const AUTO_REFRESH_INTERVAL = 50 * 60 * 1000; // 50 minutes in milliseconds
@@ -91,29 +94,7 @@ app.post("/test", (req, res) => {
 app.get("/", (req, res) => {
   res.send("🎬 AutoClipper API is running with auto-refresh Twitch tokens!");
 });
-async function startChatListener() {
-  try {
-    const authProvider = new StaticAuthProvider(
-      process.env.TWITCH_CLIENT_ID,
-      process.env.TWITCH_BOT_OAUTH
-    );
 
-    const chatClient = new ChatClient(authProvider, { channels: [process.env.STREAMER_LOGIN] });
-
-    await chatClient.connect();
-    console.log("📡 Chat listener connected for", process.env.STREAMER_LOGIN);
-
-    chatClient.onMessage((channel, user, message) => {
-      console.log(`${user}: ${message}`);
-
-      redis.incr(`comments:${process.env.STREAMER_LOGIN}`);
-    });
-  } catch (err) {
-    console.log("❌ Failed to connect to Twitch:", err);
-  }
-}
-
-startChatListener();
 
 // Start server
 app.listen(PORT, () => {
