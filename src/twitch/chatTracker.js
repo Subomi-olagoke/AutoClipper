@@ -22,6 +22,9 @@ export const startChatListener = async (streamerLogin) => {
     }
   );
 
+  // 🟩 FIX: Add chat intent
+await authProvider.addUserForToken(tokenData, ["chat"]);
+
   const chat = new ChatClient({ authProvider, channels: [streamerLogin] });
 
   chat.onMessage((channel, user, message) => {
