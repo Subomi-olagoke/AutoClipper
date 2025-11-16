@@ -7,12 +7,13 @@ import { connectDB } from "./config/db.js";
 import { connectRedis } from "./config/redis.js";
 import { verifyTwitchAuth } from "./config/twitch.js";
 import { getTwitchToken, refreshTwitchToken } from "./utils/twitchTokenManager.js";
-import streamRoutes from "./routes/streamRoutes.js";
+import streamRoutes from "./routes/streamersRoutes.js";
 import devRoutes from "./routes/devRoutes.js";
 import { clipQueue } from "./jobs/clipQueue.js";
 import spikeRoutes from "./routes/spike.js";
-import streamersRoutes from "./routes/streamers.js";
 import { startChatListener } from "./twitch/chatTracker.js";
+import streamersRoutes from "./routes/streamersRoutes.js";
+
 
 
 
