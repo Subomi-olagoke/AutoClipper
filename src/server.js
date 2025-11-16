@@ -14,7 +14,7 @@ import spikeRoutes from "./routes/spike.js";
 import streamersRoutes from "./routes/streamers.js";
 import { ChatClient } from "twitch-chat-client";
 import { StaticAuthProvider } from "twitch-auth";
-import { startChatListener } from "../twitch/chatTracker.js";
+import { startChatListener } from "./twitch/chatTracker.js";
 
 
 
