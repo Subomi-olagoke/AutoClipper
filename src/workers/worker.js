@@ -11,15 +11,15 @@ import { exec } from "child_process";
 import axios from "axios";
 import Queue from "bull";
 import { getM3u8Url } from "../utils/getm3u8.js";
+import { clipQueue } from "../jobs/clipQueue.js";
+
 
 dotenv.config();
 
 // ---------------------------
 // Bull queue
 // ---------------------------
-export const clipQueue = new Queue("clipQueue", process.env.REDIS_URL, {
-  redis: { tls: {} },
-});
+
 
 clipQueue.on("ready", () => console.log("🚀 Bull queue ready"));
 clipQueue.on("error", (err) => console.error("❌ Bull queue error:", err.message));
@@ -60,19 +60,7 @@ async function processLiveClip(jobData) {
     });
 
     // 2️⃣ Wait until spike happens
-    let spikeDetected = false;
-    while (!spikeDetected) {
-      const { data } = await axios.get(`${process.env.BACKEND_URL}/api/spike?streamer=${streamerLogin}`);
-      const { currentComments, baselineComments } = data;
-
-      if (currentComments >= baselineComments * 5) {
-        console.log(`🔥 Spike detected for ${streamerLogin}: ${currentComments}/${baselineComments * 5}`);
-        spikeDetected = true;
-      } else {
-        console.log(`📊 No spike yet for ${streamerLogin}: ${currentComments}/${baselineComments * 5}`);
-        await new Promise((r) => setTimeout(r, 5000)); // check every 5s
-      }
-    }
+ 
 
     // 3️⃣ Get live m3u8 URL
     const m3u8 = await getM3u8Url(streamerLogin);

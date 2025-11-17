@@ -3,7 +3,7 @@ import { RefreshingAuthProvider } from "@twurple/auth";
 import { ChatClient } from "@twurple/chat";
 import fs from "fs";
 
-const statsMap = new Map(); // store chat stats per streamer
+const statsMap = new Map();
 
 export const startChatListener = async (streamerLogin) => {
   if (!streamerLogin) return;
@@ -23,7 +23,6 @@ export const startChatListener = async (streamerLogin) => {
     }
   );
 
-  // 🟩 REQUIRED FOR TWITCH CHAT WITH TWURPLE
   await authProvider.addUserForToken(tokenData, ["chat"]);
 
   const chat = new ChatClient({
@@ -33,9 +32,15 @@ export const startChatListener = async (streamerLogin) => {
   });
 
   chat.onMessage((channel, user, message) => {
-    const stats = statsMap.get(channel) || { count: 0, baseline: 10 };
-    stats.count++;
-    statsMap.set(channel, stats);
+    const cleanName = channel.replace("#", "");   // NORMALIZE NAME
+
+    const stats = statsMap.get(cleanName) || {
+      count: 0,
+      baseline: 10,
+    };
+
+    stats.count++; // count messages ONLY
+    statsMap.set(cleanName, stats);
   });
 
   await chat.connect();
@@ -44,4 +49,10 @@ export const startChatListener = async (streamerLogin) => {
 
 export const getChatStats = (streamerLogin) => {
   return statsMap.get(streamerLogin) || { count: 0, baseline: 10 };
+};
+
+// 100% SAFE RESET FUNCTION
+export const resetChatStats = (streamerLogin) => {
+  const stats = statsMap.get(streamerLogin);
+  if (stats) stats.count = 0;
 };
