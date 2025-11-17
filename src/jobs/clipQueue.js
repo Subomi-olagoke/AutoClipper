@@ -4,9 +4,8 @@ import dotenv from "dotenv";
 dotenv.config();
 
 export const clipQueue = new Queue("clipQueue", process.env.REDIS_URL, {
-  // Bull options (optional)
   redis: {
-    tls: {}, // necessary for Upstash
+    tls: {}, // Required for Upstash TLS
   },
 });
 
