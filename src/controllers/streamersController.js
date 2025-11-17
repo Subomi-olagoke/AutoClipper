@@ -38,3 +38,21 @@ export async function startMonitoringStreamer(streamerLogin) {
 
   return { message: `Started monitoring ${streamerLogin}` };
 }
+
+// Stop monitoring a streamer
+export function stopMonitoringStreamer(streamerLogin) {
+  if (!activeStreamers.has(streamerLogin)) {
+    return { message: `${streamerLogin} is not being monitored` };
+  }
+
+  activeStreamers.delete(streamerLogin);
+  console.log(`🛑 Stopped monitoring ${streamerLogin}`);
+  return { message: `Stopped monitoring ${streamerLogin}` };
+}
+
+export function getStreamers(req, res) {
+  // Example: list active streamers
+  const streamers = Array.from(activeStreamers.keys());
+  res.json({ streamers });
+}
+
