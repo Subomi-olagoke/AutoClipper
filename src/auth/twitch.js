@@ -1,27 +1,9 @@
-import axios from "axios";
-import { apiClient } from "../auth/twitch.js";
+import { ApiClient } from "@twurple/api";
+import { ClientCredentialsAuthProvider } from "@twurple/auth";
 
-export async function getM3u8Url(streamerName) {
-  const user = await apiClient.users.getUserByName(streamerName);
-  if (!user) return null;
+const clientId = process.env.TWITCH_CLIENT_ID;
+const clientSecret = process.env.TWITCH_CLIENT_SECRET;
 
-  const stream = await apiClient.streams.getStreamByUserId(user.id);
-  if (!stream) return null;
+const authProvider = new ClientCredentialsAuthProvider(clientId, clientSecret);
 
-  // Get access token for playback
-  const { data } = await axios.get(
-    `https://api.twitch.tv/api/channels/${streamerName}/access_token`,
-    {
-      headers: {
-        "Client-ID": process.env.TWITCH_CLIENT_ID,
-        "Accept": "application/vnd.twitchtv.v5+json",
-      },
-    }
-  );
-
-  const sig = data.sig;
-  const token = data.token;
-
-  // Build playlist URL
-  return `https://usher.ttvnw.net/api/channel/hls/${streamerName}.m3u8?sig=${sig}&token=${token}&allow_source=true`;
-}
+export const apiClient = new ApiClient({ authProvider });
