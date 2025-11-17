@@ -65,11 +65,16 @@ async function processLiveClip(jobData) {
  
 
     // 3️⃣ Get live m3u8 URL
-    const m3u8 = await getM3u8Url(streamerLogin);
-    if (m3u8 === "offline") {
-      console.log(`⚠️ Streamer ${streamerLogin} went offline. Skipping clip.`);
-      return null;
-    }
+ // 3️⃣ Get live m3u8 URL with debug logs
+console.log("🎯 Fetching m3u8 for streamer:", streamerLogin);
+const m3u8 = await getM3u8Url(streamerLogin);
+console.log("m3u8 URL:", m3u8);
+
+if (!m3u8 || m3u8 === "offline") {
+  console.warn(`⚠️ Streamer ${streamerLogin} is offline or m3u8 not found. Skipping clip.`);
+  return null;
+}
+
 
     // 4️⃣ Record the spike clip
     const cmd = `ffmpeg -y -i "${m3u8}" -t ${duration} -c copy "${tempPath}"`;
