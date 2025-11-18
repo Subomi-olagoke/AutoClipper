@@ -14,15 +14,11 @@ import { getM3u8Url } from "../utils/getm3u8.js";
 import { clipQueue } from "../jobs/clipQueue.js";
 import { apiClient } from "../auth/twitch.js";
 
-
-
 dotenv.config();
 
 // ---------------------------
 // Bull queue
 // ---------------------------
-
-
 clipQueue.on("ready", () => console.log("🚀 Bull queue ready"));
 clipQueue.on("error", (err) => console.error("❌ Bull queue error:", err.message));
 
@@ -62,19 +58,22 @@ async function processLiveClip(jobData) {
     });
 
     // 2️⃣ Wait until spike happens
- 
 
-    // 3️⃣ Get live m3u8 URL
- // 3️⃣ Get live m3u8 URL with debug logs
-console.log("🎯 Fetching m3u8 for streamer:", streamerLogin);
-const m3u8 = await getM3u8Url(streamerLogin);
-console.log("m3u8 URL:", m3u8);
+    // 3️⃣ Get live m3u8 URL with debug logs
+    console.log("🎯 Fetching m3u8 for streamer:", streamerLogin);
+    const m3u8 = await getM3u8Url(streamerLogin);
 
-if (!m3u8 || m3u8 === "offline") {
-  console.warn(`⚠️ Streamer ${streamerLogin} is offline or m3u8 not found. Skipping clip.`);
-  return null;
-}
+    if (!m3u8) {
+      console.error(`❌ m3u8 fetch failed for ${streamerLogin}. Returned null.`);
+      return null;
+    }
 
+    if (m3u8 === "offline") {
+      console.warn(`⚠️ Streamer ${streamerLogin} is offline. Skipping clip.`);
+      return null;
+    }
+
+    console.log(`✅ m3u8 URL for ${streamerLogin}:`, m3u8);
 
     // 4️⃣ Record the spike clip
     const cmd = `ffmpeg -y -i "${m3u8}" -t ${duration} -c copy "${tempPath}"`;

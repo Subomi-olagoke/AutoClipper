@@ -1,49 +1,42 @@
-// src/utils/getm3u8.js
 import axios from "axios";
-import { apiClient } from "../auth/twitch.js";
 
-export async function getM3u8Url(streamerName) {
+export async function getM3u8Url(streamerLogin) {
   try {
-    // 1️⃣ Get user info
-    const user = await apiClient.users.getUserByName(streamerName);
-    if (!user) return "offline";
+    console.log("🔑 Fetching GQL playback token...");
 
-    // 2️⃣ Check if the stream is live
-    const stream = await apiClient.streams.getStreamByUserId(user.id);
-    if (!stream) return "offline";
-
-    console.log("🔑 Fetching HLS access token...");
-
-    // 3️⃣ Request the HLS access token
-    const { data } = await axios.post(
-      `https://id.twitch.tv/oauth2/token`,
-      null,
+    const payload = [
       {
-        params: {
-          client_id: process.env.TWITCH_CLIENT_ID,   // YOUR App Client-ID
-          client_secret: process.env.TWITCH_CLIENT_SECRET, // YOUR App Secret
-          grant_type: "client_credentials",
-        },
+        operationName: "PlaybackAccessToken",
+        query: `query PlaybackAccessToken($login: String!, $isLive: Boolean!, $vodID: ID!, $playerType: String!) {
+          streamPlaybackAccessToken(channelName: $login, params: {platform: "web", playerBackend: "mediaplayer", playerType: $playerType}) {
+            value
+            signature
+            __typename
+          }
+        }`,
+        variables: {
+          login: streamerLogin,
+          isLive: true,
+          vodID: "",
+          playerType: "site"
+        }
       }
-    );
+    ];
 
-    const appAccessToken = data.access_token;
+    const { data } = await axios.post("https://gql.twitch.tv/gql", payload, {
+      headers: {
+        "Client-ID": process.env.TWITCH_CLIENT_ID,      // Use App Client-ID
+        "Authorization": `Bearer ${process.env.TWITCH_APP_TOKEN}`, // App Token
+        "Content-Type": "application/json",
+      },
+    });
 
-    // 4️⃣ Get the channel playback token
-    const tokenRes = await axios.get(
-      `https://api.twitch.tv/api/channels/${user.id}/access_token`,
-      {
-        headers: {
-          "Client-ID": process.env.TWITCH_CLIENT_ID,
-          "Authorization": `Bearer ${appAccessToken}`,
-        },
-      }
-    );
+    const tokenData = data[0]?.data?.streamPlaybackAccessToken;
+    if (!tokenData) return "offline";
 
-    const { sig, token } = tokenRes.data;
+    const { value: token, signature: sig } = tokenData;
 
-    // 5️⃣ Return the HLS URL
-    return `https://usher.ttvnw.net/api/channel/hls/${streamerName}.m3u8?sig=${sig}&token=${token}&allow_source=true&allow_audio_only=true&allow_spectre=true`;
+    return `https://usher.ttvnw.net/api/channel/hls/${streamerLogin}.m3u8?sig=${sig}&token=${encodeURIComponent(token)}&allow_source=true`;
   } catch (err) {
     console.error("❌ Error fetching m3u8:", err.message);
     return null;
