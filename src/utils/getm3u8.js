@@ -49,7 +49,7 @@ export async function getM3u8Url(streamerLogin) {
         extensions: {
           persistedQuery: {
             version: 1,
-            sha256Hash: "0828119ded1c134d3786d8b8b26e9e0a3eb2c5d3c96b0fa0a3ec94a33f56b10b"
+            sha256Hash: "0828119ded1c13477966434e15800ff57ddacf13ba1911c129dc2200705b0712"
           }
         }
       },
@@ -64,7 +64,14 @@ export async function getM3u8Url(streamerLogin) {
       }
     );
 
+    // Debug: Log the full response to see what's actually returned
+    console.log("GQL Response:", JSON.stringify(gqlResp.data, null, 2));
+
     const { value, signature } = gqlResp.data.data.streamPlaybackAccessToken;
+
+    if (!value || !signature) {
+      throw new Error("Missing value or signature in playback token");
+    }
 
     const m3u8 = `https://usher.ttvnw.net/api/channel/hls/${streamerLogin.toLowerCase()}.m3u8` +
       `?sig=${signature}` +
@@ -78,6 +85,9 @@ export async function getM3u8Url(streamerLogin) {
 
   } catch (err) {
     console.error("Error fetching m3u8:", err.response?.data || err.message);
+    if (err.response) {
+      console.error("Full error response:", JSON.stringify(err.response.data, null, 2));
+    }
     return null;
   }
 }
