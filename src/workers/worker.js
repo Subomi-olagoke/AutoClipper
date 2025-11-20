@@ -86,6 +86,8 @@ async function processLiveClip(jobData) {
     });
 
     // 5️⃣ Upload to Cloudinary
+    const title = jobData.title || `${jobData.streamerLogin}_clip_${Date.now()}`;
+    const safePublicId = title.replace(/[^a-zA-Z0-9_-]/g, "_");
     const uploadResult = await cloudinary.uploader.upload(tempPath, {
       resource_type: "video",
       folder: "autoclipper_clips",

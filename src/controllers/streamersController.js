@@ -31,16 +31,17 @@ export async function startMonitoringStreamer(streamerLogin) {
     console.log(`📊 ${streamerLogin}: ${stats.count}/${stats.baseline}`);
 
     if (stats.count >= stats.baseline * 5) {
-      console.log(`🔥 Spike detected for ${streamerLogin}`);
-
+      console.log(`SPIKE detected for ${streamerLogin}!`);
+    
       clipQueue.add("autoClip", {
         streamerLogin,
+        title: `${streamerLogin}_${Date.now()}`,   // ← THIS FIXES EVERYTHING
         spikeComments: stats.count,
         baselineComments: stats.baseline,
         duration: 15,
       });
-
-      resetChatStats(streamerLogin); 
+    
+      resetChatStats(streamerLogin);
     }
   }, 15000);
 
