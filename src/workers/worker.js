@@ -19,8 +19,8 @@ dotenv.config();
 // ---------------------------
 // Bull queue
 // ---------------------------
-clipQueue.on("ready", () => console.log("🚀 Bull queue ready"));
-clipQueue.on("error", (err) => console.error("❌ Bull queue error:", err.message));
+clipQueue.on("ready", () => console.log("Bull queue ready"));
+clipQueue.on("error", (err) => console.error("Bull queue error:", err.message));
 
 // ---------------------------
 // Cloudinary
@@ -31,53 +31,44 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-console.log("🎧 Streamlink clip worker started");
+console.log("Streamlink clip worker started");
 
 // ---------------------------
 // MongoDB
 // ---------------------------
 mongoose
   .connect(process.env.MONGODB_URI)
-  .then(() => console.log("✅ Worker connected to MongoDB"))
-  .catch((err) => console.error("❌ Worker DB connection error:", err.message));
+  .then(() => console.log("Worker connected to MongoDB"))
+  .catch((err) => console.error("Worker DB connection error:", err.message));
 
 // ---------------------------
-// Fully reactive clip function
+// FULLY REACTIVE CLIP FUNCTION — 90s + NO AUTO DELETE + FRONTEND ALERT
 // ---------------------------
 async function processLiveClip(jobData) {
-  const { streamerLogin, title, duration = 15, spikeComments, baselineComments } = jobData;
+  const {
+    streamerLogin,
+    title = `${streamerLogin}_${Date.now()}`,
+    duration = 90,           // ← 90 seconds by default now
+    spikeComments,
+    baselineComments
+  } = jobData;
+
   const tempPath = join(tmpdir(), `${Date.now()}_clip.mp4`);
 
   try {
-    // 1️⃣ Check if Streamlink/FFmpeg is installed
-    await new Promise((resolve, reject) => {
-      exec("which ffmpeg", (err, stdout) => {
-        if (err || !stdout) reject(new Error("FFmpeg CLI not installed"));
-        resolve(stdout);
-      });
-    });
-
-    // 2️⃣ Wait until spike happens
-
-    // 3️⃣ Get live m3u8 URL with debug logs
     console.log("Current Twitch Client-ID:", process.env.TWITCH_CLIENT_ID);
-    console.log("🎯 Fetching m3u8 for streamer:", streamerLogin);
+    console.log("Fetching m3u8 for streamer:", streamerLogin);
+
     const m3u8 = await getM3u8Url(streamerLogin);
 
-    if (!m3u8) {
-      console.error(`❌ m3u8 fetch failed for ${streamerLogin}. Returned null.`);
+    if (!m3u8 || m3u8 === "offline") {
+      console.log(`Streamer ${streamerLogin} is offline or m3u8 failed`);
       return null;
     }
 
-    if (m3u8 === "offline") {
-      console.warn(`⚠️ Streamer ${streamerLogin} is offline. Skipping clip.`);
-      return null;
-    }
-
-    console.log(`✅ m3u8 URL for ${streamerLogin}:`, m3u8);
-
-    // 4️⃣ Record the spike clip
+    console.log(`Recording ${duration}s clip for ${streamerLogin}...`);
     const cmd = `ffmpeg -y -i "${m3u8}" -t ${duration} -c copy "${tempPath}"`;
+
     await new Promise((resolve, reject) => {
       exec(cmd, (err, stdout, stderr) => {
         if (err) return reject(new Error(stderr || err.message));
@@ -85,33 +76,48 @@ async function processLiveClip(jobData) {
       });
     });
 
-    // 5️⃣ Upload to Cloudinary
-    const title = jobData.title || `${jobData.streamerLogin}_clip_${Date.now()}`;
     const safePublicId = title.replace(/[^a-zA-Z0-9_-]/g, "_");
     const uploadResult = await cloudinary.uploader.upload(tempPath, {
       resource_type: "video",
       folder: "autoclipper_clips",
-      public_id: title.replace(/\s+/g, "_"),
+      public_id: safePublicId,
       fetch_format: "mp4",
     });
-    console.log(`✅ Cloudinary clip ready: ${uploadResult.secure_url}`);
 
-    // 6️⃣ Save metadata
+    console.log(`CLIP SUCCESS → ${uploadResult.secure_url}`);
+
+    // Notify frontend in real-time
+    if (global.io) {
+      global.io.emit("clip-success", {
+        message: `SPIKE DETECTED & CLIPPED: ${streamerLogin}`,
+        url: uploadResult.secure_url,
+        title,
+        streamer: streamerLogin,
+        duration,
+        spike: spikeComments,
+        timestamp: new Date().toLocaleString(),
+      });
+    }
+
     await Clip.create({
       title,
       url: uploadResult.secure_url,
       sourceUrl: `https://twitch.tv/${streamerLogin}`,
-      createdAt: new Date(),
-      spikeComments,
-      baselineComments,
       streamerLogin,
       duration,
+      spikeComments,
+      baselineComments,
+      createdAt: new Date(),
     });
 
-    fs.unlinkSync(tempPath);
+    // LOCAL FILE KEPT ON PURPOSE — YOU DELETE MANUALLY FROM /clips
+    console.log(`Local 90s clip saved: ${tempPath} → Keep until you delete from frontend`);
+
     return uploadResult.secure_url;
+
   } catch (err) {
-    console.error("❌ Live clip error:", err.message);
+    console.error("Live clip error:", err.message);
+    console.log(`Failed clip still saved at: ${tempPath} (for inspection)`);
     return null;
   }
 }
@@ -122,5 +128,9 @@ async function processLiveClip(jobData) {
 clipQueue.process("clip", async (job) => processLiveClip(job.data));
 clipQueue.process("autoClip", async (job) => processLiveClip(job.data));
 
-clipQueue.on("completed", (job, result) => console.log(`✅ Job ${job.id} completed → ${result}`));
-clipQueue.on("failed", (job, err) => console.error(`❌ Job ${job.id} failed:`, err.message));
+clipQueue.on("completed", (job, result) => 
+  console.log(`Job ${job.id} completed → ${result || "no URL"}`)
+);
+clipQueue.on("failed", (job, err) => 
+  console.error(`Job ${job.id} failed:`, err.message)
+);

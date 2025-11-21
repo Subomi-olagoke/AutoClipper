@@ -23,27 +23,37 @@ export async function startMonitoringStreamer(streamerLogin) {
   await startChatListener(streamerLogin);
 
   // Create interval
-  const intervalId = setInterval(() => {
-    const stats = getChatStats(streamerLogin);
+  // In your startMonitoringStreamer interval (replace the old interval)
+const intervalId = setInterval(() => {
+  const stats = getChatStats(streamerLogin);
+  if (!stats) return;
 
-    if (!stats) return; // <-- 🚨 prevents crash
+  console.log(`${streamerLogin}: ${stats.count}/${stats.baseline}`);
 
-    console.log(`📊 ${streamerLogin}: ${stats.count}/${stats.baseline}`);
+  // SPIKE: 1500+ messages in the last 15s window
+  if (stats.count >= 1500) {  
+    console.log(`MASSIVE SPIKE DETECTED → ${streamerLogin} (${stats.count} msgs)`);
 
-    if (stats.count >= stats.baseline * 5) {
-      console.log(`SPIKE detected for ${streamerLogin}!`);
-    
-      clipQueue.add("autoClip", {
-        streamerLogin,
-        title: `${streamerLogin}_${Date.now()}`,   // ← THIS FIXES EVERYTHING
-        spikeComments: stats.count,
-        baselineComments: stats.baseline,
-        duration: 15,
+    clipQueue.add("autoClip", {
+      streamerLogin,
+      title: `${streamerLogin}_spike_${Date.now()}`,
+      duration: 90,           // ← 90 seconds
+      spikeComments: stats.count,
+      baselineComments: stats.baseline,
+    });
+
+    // Optional: Emit live alert to frontend
+    if (global.io) {
+      global.io.emit("spike-alert", {
+        streamer: streamerLogin,
+        messages: stats.count,
+        time: new Date().toLocaleString(),
       });
-    
-      resetChatStats(streamerLogin);
     }
-  }, 15000);
+
+    resetChatStats(streamerLogin);
+  }
+}, 15000);
 
   // Store interval ID
   activeStreamers.set(streamerLogin, { intervalId });

@@ -13,60 +13,93 @@ export const getClips = async (req, res) => {
       .lean();
 
     // If requested from browser → serve a beautiful HTML gallery
-    if (req.headers.accept?.includes("text/html")) {
-      const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
+
+if (req.headers.accept?.includes("text/html")) {
+  const page = parseInt(req.query.page) || 1;
+  const limit = 12; // 12 clips per page — perfect for mobile
+  const skip = (page - 1) * limit;
+
+  const total = await Clip.countDocuments();
+  const clips = await Clip.find()
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .lean();
+
+  const totalPages = Math.ceil(total / limit);
+
+  const html = `
+<!DOCTYPE html>
+<html><head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>My Auto-Clips • ${clips.length} clips</title>
+  <title>Clips • Page ${page}</title>
   <style>
-    body { margin:0; background:#0e0e10; color:#e4e4e7; font-family:system-ui,sans-serif; padding:20px; }
-    h1 { text-align:center; color:#9146ff; }
-    .stats { text-align:center; font-size:1.4em; margin:20px; color:#9146ff; }
-    .grid { display:grid; gap:20px; grid-template-columns:repeat(auto-fill,minmax(380px,1fr)); max-width:1400px; margin:0 auto; }
-    .clip { background:#1a1a1d; border-radius:12px; overflow:hidden; box-shadow:0 8px 32px rgba(145,70,255,0.15); }
-    video { width:100%; height:214px; object-fit:cover; background:#000; }
-    .info { padding:14px; }
-    .title { font-weight:bold; color:#9146ff; margin:0 0 8px; font-size:1.1em; }
-    .meta { font-size:0.9em; opacity:0.85; line-height:1.5; }
-    a { color:#9146ff; text-decoration:none; }
-    a:hover { text-decoration:underline; }
-    .empty { text-align:center; padding:60px; font-size:1.3em; opacity:0.6; }
-  </style>
-</head>
-<body>
-  <h1>Twitch Auto-Clipper</h1>
-  <div class="stats">Total clips: <strong>${clips.length}</strong></div>
-
-  ${clips.length === 0
-    ? `<div class="empty">No clips yet. Waiting for the next spike...</div>`
-    : `<div class="grid">
-        ${clips
-          .map(
-            (c) => `
-          <div class="clip">
-            <video controls preload="metadata" poster="${c.url.replace(".mp4", ".jpg")}">
-              <source src="${c.url}#t=0.1" type="video/mp4" />
-            </video>
-            <div class="info">
-              <div class="title">${c.title || c.streamerLogin + " spike"}</div>
-              <div class="meta">
-                <a href="${c.sourceUrl}" target="_blank">${c.streamerLogin}</a><br>
-                ${new Date(c.createdAt).toLocaleString()}<br>
-                Duration: ${c.duration}s | Spike: ${c.spikeComments} msgs (baseline: ${c.baselineComments})
-              </div>
-            </div>
-          </div>`
-          )
-          .join("")}
-      </div>`
-  }
-</body>
-</html>`;
-
-      return res.send(html);
+    body { margin:0; background:#0e0e10; color:#e4e4e7; font-family:system-ui; padding:15px; }
+    h1 { text-align:center; color:#9146ff; margin:0 0 10px; }
+    .stats { text-align:center; color:#9146ff; font-size:1.1em; margin-bottom:20px; }
+    .grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); }
+    .clip { background:#1a1a1d; border-radius:12px; overflow:hidden; }
+    .thumb { width:100%; height:200px; object-fit:cover; background:#000; }
+    .info { padding:12px; }
+    .title { color:#9146ff; font-weight:bold; margin:0 0 6px; }
+    .meta { font-size:0.9em; opacity:0.8; }
+    .pagination { text-align:center; margin:30px 0; }
+    .pagination button, .pagination a { 
+      padding:10px 16px; margin:0 5px; background:#9146ff; color:white; 
+      border:none; border-radius:8px; cursor:pointer; text-decoration:none;
     }
+    .pagination .current { background:#333; }
+  </style>
+</head><body>
+  <h1>Twitch Auto-Clips</h1>
+  <div class="stats">Total: <strong>${total}</strong> clips • Page ${page}/${totalPages || 1}</div>
+
+  <div class="grid">
+    ${clips.map(c => `
+      <div class="clip" id="clip-${c._id}">
+        <img class="thumb" loading="lazy" src="${c.url.replace('.mp4', '.jpg')}" 
+             onerror="this.src='https://via.placeholder.com/340x200/333/9146ff?text=${c.streamerLogin}'">
+        <div class="info">
+          <div class="title">${c.title || c.streamerLogin + " spike"}</div>
+          <div class="meta">
+            <a href="${c.sourceUrl}" target="_blank">${c.streamerLogin}</a> • 
+            ${new Date(c.createdAt).toLocaleDateString()}<br>
+            ${c.duration}s • ${c.spikeComments} msgs spike
+          </div>
+          <button onclick="playClip('${c.url}')" style="margin:8px 0 0; padding:6px 12px; background:#9146ff; color:white; border:none; border-radius:6px;">
+            Play
+          </button>
+          <button onclick="deleteClip('${c._id}')" style="margin:8px 0 0 4px; padding:6px 12px; background:#ff4444; color:white; border:none; border-radius:6px;">
+            Delete
+          </button>
+        </div>
+      </div>
+    `).join("")}
+  </div>
+
+  <div class="pagination">
+    ${page > 1 ? `<a href="?page=${page-1}">Previous</a>` : `<span class="current">Previous</span>`}
+    <strong>${page}</strong>
+    ${page < totalPages ? `<a href="?page=${page+1}">Next</a>` : `<span class="current">Next</span>`}
+  </div>
+
+  <script>
+    function playClip(url) { window.open(url, "_blank"); }
+    async function deleteClip(id) {
+      if (!confirm("Delete forever?")) return;
+      await fetch("/clips/"+id, {method:"DELETE"});
+      document.getElementById("clip-"+id).remove();
+    }
+  </script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    socket.on("clip-success", () => location.reload());
+  </script>
+</body></html>`;
+  return res.send(html);
+}
 
     // Otherwise → return clean JSON (for API / frontend apps)
     res.json({
@@ -110,5 +143,50 @@ export const createClip = async (req, res) => {
   } catch (err) {
     console.error("Create clip error:", err);
     res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// DELETE a clip (from Cloudinary + MongoDB)
+export const deleteClip = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ error: "Clip ID required" });
+
+    const clip = await Clip.findById(id);
+    if (!clip) return res.status(404).json({ error: "Clip not found" });
+
+    // Extract public_id from Cloudinary URL
+    // Example URL: https://res.cloudinary.com/.../autoclipper_clips/fanfan_123456789.mp4
+    const publicId = clip.url
+      .split("/")
+      .slice(-2)
+      .join("/")
+      .replace(".mp4", "");
+
+    // Delete from Cloudinary
+    const cloudinaryResult = await cloudinary.uploader.destroy(publicId, {
+      resource_type: "video",
+    });
+
+    if (cloudinaryResult.result !== "ok" && cloudinaryResult.result !== "not found") {
+      throw new Error(`Cloudinary delete failed: ${cloudinaryResult.result}`);
+    }
+
+    // Delete from MongoDB
+    await Clip.findByIdAndDelete(id);
+
+    // Optional: real-time update for all frontends
+    if (global.io) {
+      global.io.emit("clip-deleted", { id });
+    }
+
+    res.json({
+      success: true,
+      message: "Clip permanently deleted from Cloudinary + database",
+      deletedId: id,
+    });
+  } catch (err) {
+    console.error("Delete clip error:", err);
+    res.status(500).json({ error: err.message });
   }
 };
