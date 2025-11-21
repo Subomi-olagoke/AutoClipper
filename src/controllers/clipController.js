@@ -1,6 +1,8 @@
 // controllers/clipController.js
+import { v2 as cloudinary } from "cloudinary";
 import Clip from "../models/clipModel.js";
 import { clipQueue } from "../jobs/clipQueue.js";
+
 
 // GET /api/clips → All uploaded clips (newest first)
 export const getClips = async (req, res) => {
@@ -156,7 +158,6 @@ export const deleteClip = async (req, res) => {
     if (!clip) return res.status(404).json({ error: "Clip not found" });
 
     // Extract public_id from Cloudinary URL
-    // Example URL: https://res.cloudinary.com/.../autoclipper_clips/fanfan_123456789.mp4
     const publicId = clip.url
       .split("/")
       .slice(-2)
@@ -164,29 +165,27 @@ export const deleteClip = async (req, res) => {
       .replace(".mp4", "");
 
     // Delete from Cloudinary
-    const cloudinaryResult = await cloudinary.uploader.destroy(publicId, {
+    const result = await cloudinary.uploader.destroy(publicId, {
       resource_type: "video",
     });
 
-    if (cloudinaryResult.result !== "ok" && cloudinaryResult.result !== "not found") {
-      throw new Error(`Cloudinary delete failed: ${cloudinaryResult.result}`);
+    if (result.result !== "ok" && result.result !== "not found") {
+      throw new Error(`Cloudinary delete failed: ${result.result}`);
     }
 
-    // Delete from MongoDB
+    // Delete from DB
     await Clip.findByIdAndDelete(id);
 
-    // Optional: real-time update for all frontends
-    if (global.io) {
-      global.io.emit("clip-deleted", { id });
-    }
+    // Real-time update
+    if (global.io) global.io.emit("clip-deleted", { id });
 
     res.json({
       success: true,
-      message: "Clip permanently deleted from Cloudinary + database",
+      message: "Clip deleted from Cloudinary + DB",
       deletedId: id,
     });
   } catch (err) {
-    console.error("Delete clip error:", err);
+    console.error("Delete error:", err.message);
     res.status(500).json({ error: err.message });
   }
 };
