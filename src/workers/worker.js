@@ -76,8 +76,11 @@ async function processLiveClip(jobData) {
       });
     });
 
+    // ———— FIXED BLOCK START ————
     const safePublicId = title.replace(/[^a-zA-Z0-9_-]/g, "_");
-    const uploadResult = await cloudinary.uploader.upload(tempPath, {
+    
+    // START ASYNC UPLOAD → THEN EXIT IMMEDIATELY
+    cloudinary.uploader.upload(tempPath, {
       resource_type: "video",
       folder: "autoclipper_clips",
       public_id: safePublicId,
@@ -87,40 +90,31 @@ async function processLiveClip(jobData) {
         { streaming_profile: "hd", format: "m3u8" },
         { quality: "auto", fetch_format: "mp4" }
       ],
-      // THIS LINE → YOU GET NOTIFIED THE SECOND IT’S DONE
       eager_notification_url: "https://autoclipper-shb4.onrender.com/webhook/cloudinary"
+    }).then(() => {
+      console.log(`Async upload started for ${safePublicId} — will finish in background`);
+    }).catch(err => {
+      console.error("Async upload failed to start:", err.message);
     });
 
-    console.log(`CLIP SUCCESS → ${uploadResult.secure_url}`);
-
-    // Notify frontend in real-time
+    // INSTANT FEEDBACK — TELL FRONTEND CLIP IS COMING
     if (global.io) {
       global.io.emit("clip-success", {
-        message: `SPIKE DETECTED & CLIPPED: ${streamerLogin}`,
-        url: uploadResult.secure_url,
+        message: `SPIKE DETECTED → Recording 90s for ${streamerLogin.toUpperCase()}...`,
+        url: null,
         title,
         streamer: streamerLogin,
         duration,
         spike: spikeComments,
         timestamp: new Date().toLocaleString(),
+        status: "recording"
       });
     }
 
-    await Clip.create({
-      title,
-      url: uploadResult.secure_url,
-      sourceUrl: `https://twitch.tv/${streamerLogin}`,
-      streamerLogin,
-      duration,
-      spikeComments,
-      baselineComments,
-      createdAt: new Date(),
-    });
-
-    // LOCAL FILE KEPT ON PURPOSE — YOU DELETE MANUALLY FROM /clips
-    console.log(`Local 90s clip saved: ${tempPath} → Keep until you delete from frontend`);
-
-    return uploadResult.secure_url;
+    // DO NOT WAIT FOR CLOUDINARY → RETURN SUCCESS NOW
+    console.log(`90s clip recorded locally: ${tempPath} → async upload started`);
+    return `async_upload_started_${safePublicId}`;
+    // ———— FIXED BLOCK END ————
 
   } catch (err) {
     console.error("Live clip error:", err.message);
@@ -136,7 +130,7 @@ clipQueue.process("clip", async (job) => processLiveClip(job.data));
 clipQueue.process("autoClip", async (job) => processLiveClip(job.data));
 
 clipQueue.on("completed", (job, result) => 
-  console.log(`Job ${job.id} completed → ${result || "no URL"}`)
+  console.log(`Job ${job.id} completed → ${resultado || "no URL"}`)
 );
 clipQueue.on("failed", (job, err) => 
   console.error(`Job ${job.id} failed:`, err.message)
