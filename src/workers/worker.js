@@ -88,19 +88,21 @@ async function processLiveClip(jobData) {
     console.log(`DB entry created → ${clipDoc._id} (uploading)`);
 
     // UPLOAD TO CLOUDINARY (async)
-    cloudinary.uploader.upload(tempPath, {
-      resource_type: "video",
-      folder: "autoclipper_clips",
-      public_id: safePublicId,
-      format: "mp4",
-      async: true,
-      eager: [{ streaming_profile: "hd", format: "m3u8" }],
-      eager_async: true,
-      eager_notification_url: "https://autoclipper-shb4.onrender.com/webhook/cloudinary",
-      context: `clip_id=${clipDoc._id}|streamer=${streamerLogin}`
-    })
-    .then(() => console.log(`Upload sent → ${safePublicId}`))
-    .catch(err => console.error("Cloudinary rejected:", err.message));
+ // ULTRA-FAST RAW UPLOAD — 5–15 seconds total
+ cloudinary.uploader.upload(tempPath, {
+  resource_type: "video",
+  folder: "autoclipper_clips",
+  public_id: safePublicId,
+  format: "mp4",
+  type: "upload",           // default
+  async: true,
+  upload_preset: "twitch_raw_fast",   // ← THIS IS THE MAGIC
+  eager: [],                 // ← Remove HLS for speed
+  eager_async: false,
+  eager_notification_url: "https://autoclipper-shb4.onrender.com/webhook/cloudinary"
+})
+.then(() => console.log(`FAST upload sent → ${safePublicId}`))
+.catch(err => console.error("Upload failed:", err.message));
 
     if (global.io) {
       global.io.emit("clip-success", {
