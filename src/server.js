@@ -14,6 +14,7 @@ import spikeRoutes from "./routes/spike.js";
 import { startChatListener } from "./twitch/chatTracker.js";
 import streamersRoutes from "./routes/streamersRoutes.js";
 import cloudinaryWebhook from "./routes/webhook/cloudinary.js";
+import testClips from "./routes/testClips.js";
 
 // ← THIS WAS MISSING → YOU USE Clip.create() IN WEBHOOK
 import Clip from "./models/clipModel.js";
@@ -55,6 +56,7 @@ app.use("/api/stream", streamRoutes);
 app.use("/api/spike", spikeRoutes);
 app.use("/api/streamers", streamersRoutes);
 app.use("/", cloudinaryWebhook);
+app.use("/", testClips); // ← makes /test/twitch work
 
 app.post("/test", (req, res) => {
   console.log("/test route hit");

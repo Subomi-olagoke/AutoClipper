@@ -21,7 +21,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-console.log("Streamlink clip worker started — READY TO RECORD BANGERS");
+console.log("ULTIMATE MULTI-PLATFORM CLIPPER → TWITCH / YOUTUBE / KICK");
 
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("Worker → MongoDB connected"))
@@ -29,8 +29,9 @@ mongoose.connect(process.env.MONGODB_URI)
 
 async function processLiveClip(jobData) {
   const {
+    platform = "twitch",
     streamerLogin,
-    title = `${streamerLogin}_${Date.now()}`,
+    title = `${platform}_${streamerLogin}_${Date.now()}`,
     duration = 90,
     spikeComments,
     baselineComments
@@ -39,103 +40,79 @@ async function processLiveClip(jobData) {
   const tempPath = join(tmpdir(), `${Date.now()}_clip.mp4`);
 
   try {
-    console.log(`Recording ${duration}s clip → ${streamerLogin}`);
+    console.log(`Recording ${duration}s from ${platform.toUpperCase()} → ${streamerLogin}`);
 
-    const cmd = [
-      "streamlink",
-      "--twitch-disable-ads",
-      "--twitch-disable-reruns",
-      "--hls-duration", duration.toString(),
-      "--output", tempPath,
-      `twitch.tv/${streamerLogin}`,
-      "best"
-    ].join(" ");
+    let cmd;
+
+    if (platform === "youtube") {
+      const url = streamerLogin.startsWith("http") ? streamerLogin : `https://youtube.com/watch?v=${streamerLogin}`;
+      cmd = `yt-dlp -f "best[height<=1080]" --hls-use-mpegts --no-part --wait-for-video 30 -o "${tempPath}" "${url}"`;
+    } 
+    else if (platform === "kick") {
+      cmd = `streamlink --hls-duration ${duration} --output "${tempPath}" "https://kick.com/${streamerLogin}" best`;
+    } 
+    else { // twitch
+      cmd = `streamlink --twitch-disable-ads --hls-duration ${duration} --output "${tempPath}" "https://twitch.tv/${streamerLogin}" best`;
+    }
 
     console.log("Running:", cmd);
+    await execAsync(cmd, { timeout: 240000 });
 
-    const { stderr } = await execAsync(cmd, { timeout: 180000 });
+    if (!fs.existsSync(tempPath)) throw new Error("No file created");
 
-    if (stderr && !stderr.includes("Writing output to")) {
-      console.warn("Streamlink warning:", stderr);
-    }
+    const stats = fs.statSync(tempPath);
+    console.log(`Clip recorded → ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
 
-    // VALIDATE FILE EXISTS AND IS BIG ENOUGH
-    if (!fs.existsSync(tempPath)) {
-      throw new Error("Streamlink failed to create file");
-    }
-
-    const stats = fs.statSync(tempPath);  // ← THIS WAS MISSING BEFORE!
-    console.log(`Clip recorded! Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
-
-    if (stats.size < 8 * 1024 * 1024) {
-      throw new Error(`Clip too small (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-    }
+    if (stats.size < 8 * 1024 * 1024) throw new Error("Clip too small — stream offline");
 
     const safePublicId = title.replace(/[^a-zA-Z0-9_-]/g, "_");
 
-    // CREATE DB ENTRY IMMEDIATELY
     const clipDoc = await Clip.create({
       title,
       streamerLogin,
-      sourceUrl: `https://twitch.tv/${streamerLogin}`,
+      sourceUrl: platform === "youtube" 
+        ? (streamerLogin.startsWith("http") ? streamerLogin : `https://youtube.com/watch?v=${streamerLogin}`)
+        : `https://${platform}.com/${streamerLogin}`,
+      platform,
       duration,
-      cloudinaryPublicId: `autoclipper_clips/${safePublicId}`,  // EXACT MATCH
+      cloudinaryPublicId: `autoclipper_clips/${safePublicId}`,
       spikeComments,
       baselineComments,
       status: "uploading"
     });
 
-    console.log(`DB entry created → ${clipDoc._id} (uploading)`);
+    console.log(`DB entry → ${clipDoc._id} (${platform})`);
 
-    // UPLOAD TO CLOUDINARY (async)
- // ULTRA-FAST RAW UPLOAD — 5–15 seconds total
- cloudinary.uploader.upload(tempPath, {
-  resource_type: "video",
-  folder: "autoclipper_clips",
-  public_id: safePublicId,
-  format: "mp4",
-  type: "upload",           // default
-  async: true,
-  upload_preset: "twitch_raw_fast",   // ← THIS IS THE MAGIC
-  eager: [],                 // ← Remove HLS for speed
-  eager_async: false,
-  eager_notification_url: "https://autoclipper-shb4.onrender.com/webhook/cloudinary"
-})
-.then(() => console.log(`FAST upload sent → ${safePublicId}`))
-.catch(err => console.error("Upload failed:", err.message));
+    cloudinary.uploader.upload(tempPath, {
+      resource_type: "video",
+      folder: "autoclipper_clips",
+      public_id: safePublicId,
+      format: "mp4",
+      async: true,
+      upload_preset: "twitch_raw_fast",
+      eager: [],
+      eager_notification_url: "https://autoclipper-shb4.onrender.com/webhook/cloudinary"
+    });
+
+    console.log(`Upload sent → ${safePublicId}`);
 
     if (global.io) {
       global.io.emit("clip-success", {
-        message: `BANGER RECORDED → ${streamerLogin.toUpperCase()}`,
-        title,
-        streamer: streamerLogin,
-        duration,
-        spike: spikeComments,
-        timestamp: new Date().toLocaleString(),
-        status: "uploading",
-        clipId: clipDoc._id
+        message: `${platform.toUpperCase()} BANGER`,
+        title, platform, streamer: streamerLogin, duration, spike: spikeComments,
+        status: "uploading", clipId: clipDoc._id
       });
     }
 
-    console.log(`SUCCESS → ${streamerLogin} 90s clip ready`);
     return clipDoc._id;
 
-  } catch (error) {
-    console.error(`FAILED → ${streamerLogin}:`, error.message);
-    if (fs.existsSync(tempPath)) {
-      const size = fs.statSync(tempPath).size;
-      console.log(`Failed clip saved: ${tempPath} (${(size / 1024 / 1024).toFixed(2)} MB)`);
-    }
+  } catch (err) {
+    console.error(`FAILED ${platform} ${streamerLogin}:`, err.message);
     return null;
   } finally {
-    setTimeout(() => {
-      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-    }, 10000);
+    setTimeout(() => fs.existsSync(tempPath) && fs.unlinkSync(tempPath), 10000);
   }
 }
 
 clipQueue.process("clip", async (job) => await processLiveClip(job.data));
 clipQueue.process("autoClip", async (job) => await processLiveClip(job.data));
-
-clipQueue.on("completed", (job) => console.log(`Job ${job.id} completed`));
-clipQueue.on("failed", (job, err) => console.error(`Job ${job.id} failed:`, err.message));

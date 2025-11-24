@@ -15,6 +15,14 @@ const clipSchema = new mongoose.Schema({
     sparse: true 
   },
 
+  platform: { 
+    type: String, 
+    enum: ["twitch", "youtube", "kick"], 
+    default: "twitch", 
+    required: true,
+    index: true 
+  },
+
   status: { 
     type: String, 
     enum: ["uploading", "ready", "failed"], 

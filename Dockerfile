@@ -1,14 +1,14 @@
 # Use Node.js 22
 FROM node:22-bullseye
 
-# Install system dependencies
+# Install system dependencies + yt-dlp (for YouTube)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ffmpeg \
         python3 \
         python3-pip \
         curl && \
-    pip3 install --no-cache-dir streamlink && \
+    pip3 install --no-cache-dir streamlink yt-dlp && \
     rm -rf /var/lib/apt/lists/*
 
 # Set working dir
@@ -21,5 +21,5 @@ RUN npm install --production
 # Copy all source files
 COPY . .
 
-# Run your worker (correct path)
+# Run your worker
 CMD ["node", "src/workers/worker.js"]
