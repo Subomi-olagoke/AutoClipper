@@ -1,15 +1,19 @@
 // src/workers/kickChatWorker.js
-import { KickChat } from "kick-chat-api";
+import { createClient } from "@retconned/kick-js";
 import { clipQueue } from "../jobs/clipQueue.js";
 
-let kickChat;
+let kickConnection;
 
 export const startKickMonitoring = (username) => {
-  kickChat = new KickChat(username);
+  kickConnection = createClient(username, { logger: false, readOnly: true });
 
-  kickChat.on("message", (msg) => {
-    // Spike detection (add your counter logic)
-    const messageCount = 1; // Increment global counter
+  kickConnection.on("ready", () => {
+    console.log(`Kick monitoring → ${username}`);
+  });
+
+  kickConnection.on("message", (messageData) => {
+    // Spike detection (add your counter)
+    const messageCount = 1; // Increment global counter here
 
     if (messageCount > 50) {
       console.log(`KICK SPIKE → ${username} (${messageCount})`);
@@ -23,8 +27,12 @@ export const startKickMonitoring = (username) => {
     }
   });
 
-  kickChat.connect();
-  console.log(`Kick monitoring → ${username}`);
+  kickConnection.on("error", (err) => {
+    console.error("Kick chat error:", err.message);
+    kickConnection.connect(); // Auto-reconnect
+  });
+
+  kickConnection.login(); // No credentials needed for read-only
 };
 
-export const stopKickMonitoring = () => kickChat && kickChat.disconnect();
+export const stopKickMonitoring = () => kickConnection && kickConnection.logout();
