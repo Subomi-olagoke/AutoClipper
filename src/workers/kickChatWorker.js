@@ -1,44 +1,30 @@
 // src/workers/kickChatWorker.js
-import { createClient } from "@retconned/kick-js";
+import { KickChat } from "kick-chat-api";
 import { clipQueue } from "../jobs/clipQueue.js";
-import dotenv from "dotenv";
 
-dotenv.config();
-
-let kickConnection;
+let kickChat;
 
 export const startKickMonitoring = (username) => {
-  kickConnection = createClient(username, { logger: false, readOnly: true });
+  kickChat = new KickChat(username);
 
-  kickConnection.on("ready", () => {
-    console.log(`Kick monitoring → ${username}`);
-  });
+  kickChat.on("message", (msg) => {
+    // Spike detection (add your counter logic)
+    const messageCount = 1; // Increment global counter
 
-  kickConnection.on("message", (message) => {
-    // Simple spike detection (count messages in 10s window)
-    // You can use a more advanced system like your Twitch one
-    const messageCount = 1;  // Increment counter here
-
-    if (messageCount > 500) {  // Adjust threshold
-      console.log(`KICK SPIKE → ${username} (${messageCount} msgs)`);
+    if (messageCount > 50) {
+      console.log(`KICK SPIKE → ${username} (${messageCount})`);
       clipQueue.add("clip", {
         platform: "kick",
         streamerLogin: username,
         title: `kick_spike_${Date.now()}`,
         duration: 90,
-        spikeComments: messageCount,
-        baselineComments: 10
+        spikeComments: messageCount
       });
     }
   });
 
-  kickConnection.on("error", (err) => {
-    console.error("Kick chat error:", err.message);
-  });
-
-  kickConnection.connect();
+  kickChat.connect();
+  console.log(`Kick monitoring → ${username}`);
 };
 
-export const stopKickMonitoring = () => {
-  if (kickConnection) kickConnection.disconnect();
-};
+export const stopKickMonitoring = () => kickChat && kickChat.disconnect();
