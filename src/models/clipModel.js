@@ -15,11 +15,13 @@ const clipSchema = new mongoose.Schema({
     sparse: true 
   },
 
+  chatroomId: { type: String },  // For YouTube live chat ID
+
   platform: { 
     type: String, 
     enum: ["twitch", "youtube", "kick"], 
     default: "twitch", 
-    required: true,
+    required: true, 
     index: true 
   },
 

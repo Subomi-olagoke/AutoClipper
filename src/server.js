@@ -15,6 +15,8 @@ import { startChatListener } from "./twitch/chatTracker.js";
 import streamersRoutes from "./routes/streamersRoutes.js";
 import cloudinaryWebhook from "./routes/webhook/cloudinary.js";
 import testClips from "./routes/testClips.js";
+import { startYouTubeMonitoring } from "./workers/youtubeChatWorker.js";
+import { startKickMonitoring } from "./workers/kickChatWorker.js";
 
 // ← THIS WAS MISSING → YOU USE Clip.create() IN WEBHOOK
 import Clip from "./models/clipModel.js";
@@ -46,6 +48,12 @@ await verifyTwitchAuth();
 
 await initTwitchTokens();
 startChatListener(process.env.STREAMER_LOGIN);
+
+// Start monitoring for YouTube channel (replace with channel ID)
+startYouTubeMonitoring("UC_x5XG1OV2P6uZZ5FSM9Ttw");  // PewDiePie example
+
+// Start monitoring for Kick streamer
+startKickMonitoring("adinross");
 
 // Auto-refresh Twitch token
 startAutoRefresh();

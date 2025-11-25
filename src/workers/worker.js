@@ -21,7 +21,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-console.log("ULTIMATE MULTI-PLATFORM CLIPPER → TWITCH / YOUTUBE / KICK");
+console.log("MULTI-PLATFORM CLIPPER → TWITCH / YOUTUBE / KICK (VIDEO ONLY)");
 
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("Worker → MongoDB connected"))
@@ -33,7 +33,7 @@ async function processLiveClip(jobData) {
     streamerLogin,
     title = `${platform}_${streamerLogin}_${Date.now()}`,
     duration = 90,
-    spikeComments,
+    spikeComments,  // Optional — for Twitch spikes
     baselineComments
   } = jobData;
 
@@ -45,14 +45,14 @@ async function processLiveClip(jobData) {
     let cmd;
 
     if (platform === "youtube") {
-      const url = streamerLogin.startsWith("http") ? streamerLogin : `https://youtube.com/watch?v=${streamerLogin}`;
-      cmd = `yt-dlp -f "best[height<=1080]" --hls-use-mpegts --no-part --wait-for-video 30 -o "${tempPath}" "${url}"`;
-    } 
-    else if (platform === "kick") {
+      // YouTube VOD/Live — yt-dlp handles everything
+      cmd = `yt-dlp -f "best[height<=1080]" --no-part -o "${tempPath}" "https://youtube.com/watch?v=${streamerLogin}"`;
+    } else if (platform === "kick") {
+      // Kick — Streamlink supports natively
       cmd = `streamlink --hls-duration ${duration} --output "${tempPath}" "https://kick.com/${streamerLogin}" best`;
-    } 
-    else { // twitch
-      cmd = `streamlink --twitch-disable-ads --hls-duration ${duration} --output "${tempPath}" "https://twitch.tv/${streamerLogin}" best`;
+    } else {
+      // Twitch — your original working code
+      cmd = `streamlink --twitch-disable-ads --twitch-disable-reruns --hls-duration ${duration} --output "${tempPath}" "https://twitch.tv/${streamerLogin}" best`;
     }
 
     console.log("Running:", cmd);
@@ -63,16 +63,14 @@ async function processLiveClip(jobData) {
     const stats = fs.statSync(tempPath);
     console.log(`Clip recorded → ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
 
-    if (stats.size < 8 * 1024 * 1024) throw new Error("Clip too small — stream offline");
+    if (stats.size < 8 * 1024 * 1024) throw new Error("Clip too small");
 
     const safePublicId = title.replace(/[^a-zA-Z0-9_-]/g, "_");
 
     const clipDoc = await Clip.create({
       title,
       streamerLogin,
-      sourceUrl: platform === "youtube" 
-        ? (streamerLogin.startsWith("http") ? streamerLogin : `https://youtube.com/watch?v=${streamerLogin}`)
-        : `https://${platform}.com/${streamerLogin}`,
+      sourceUrl: `https://${platform}.com/${streamerLogin}`,
       platform,
       duration,
       cloudinaryPublicId: `autoclipper_clips/${safePublicId}`,
@@ -83,6 +81,7 @@ async function processLiveClip(jobData) {
 
     console.log(`DB entry → ${clipDoc._id} (${platform})`);
 
+    // FAST UPLOAD
     cloudinary.uploader.upload(tempPath, {
       resource_type: "video",
       folder: "autoclipper_clips",
