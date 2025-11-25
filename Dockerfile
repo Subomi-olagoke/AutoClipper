@@ -1,7 +1,7 @@
 # Use Node.js 22
 FROM node:22-bullseye
 
-# Install system dependencies + yt-dlp (from pip — this is what we actually use)
+# Install system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ffmpeg \
@@ -11,21 +11,20 @@ RUN apt-get update && \
     pip3 install --no-cache-dir streamlink yt-dlp && \
     rm -rf /var/lib/apt/lists/*
 
-# ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-# CRITICAL: Set the env var BEFORE npm install
-ENV YT_DLP_EXEC_SKIP_DOWNLOAD=true
-# ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-
+# Set working dir
 WORKDIR /app
 
-# Now copy package files
+# CRITICAL: Correct env var name to skip postinstall GitHub fetch
+ENV YOUTUBE_DL_SKIP_DOWNLOAD=true
+
+# Copy package.json
 COPY package*.json ./
 
-# npm install runs with the env var already active → postinstall script SKIPS GitHub download
+# Now npm install (postinstall script sees the env var and skips)
 RUN npm install --production
 
-# Copy source code
+# Copy all source files
 COPY . .
 
-# Start worker
+# Run your worker
 CMD ["node", "src/workers/worker.js"]
