@@ -52,8 +52,13 @@ startChatListener(process.env.STREAMER_LOGIN);
 // Start monitoring for YouTube channel (replace with channel ID)
 startYouTubeMonitoring("UC_x5XG1OV2P6uZZ5FSM9Ttw");  // PewDiePie example
 
+await fetchKickToken();
+setInterval(() => monitorKickChat('your-kick-channel'), 60000); // Poll every min
+
 // Start monitoring for Kick streamer
 startKickMonitoring("adinross");
+
+
 
 // Auto-refresh Twitch token
 startAutoRefresh();

@@ -1,41 +1,47 @@
 // src/workers/kickChatWorker.js
-import KickStreamChat from "kick-stream-chat";
+import { WebSocketConnection, MessageEvents } from "kick_live_ws";
 import { clipQueue } from "../jobs/clipQueue.js";
 
-let kickChat;
+let kickConnection = null;
+let messageCount = 0;
+let resetInterval;
 
 export const startKickMonitoring = (username) => {
-  try {
-    kickChat = new KickStreamChat(username);
-
-    kickChat.on("message", (message) => {
-      // Spike detection (use your counter logic)
-      const messageCount = 1;  // Increment global message counter here
-
-      if (messageCount > 50) {  // Threshold for spike
-        console.log(`KICK SPIKE → ${username} (${messageCount} msgs)`);
-        clipQueue.add("clip", {
-          platform: "kick",
-          streamerLogin: username,
-          title: `kick_spike_${Date.now()}`,
-          duration: 90,
-          spikeComments: messageCount
-        });
-      }
-    });
-
-    kickChat.connect();
-    console.log(`Kick monitoring started → ${username}`);
-
-  } catch (err) {
-    console.error("Kick chat init error:", err.message);
+  if (kickConnection) {
+    console.log(`✅ Kick monitoring already running for ${username}`);
+    return;
   }
+
+  console.log(`🔄 Connecting to Kick chat for ${username}...`);
+
+  kickConnection = new WebSocketConnection({ name: username });
+  kickConnection.connect();
+
+  kickConnection.on(MessageEvents.CHATMESSAGE, (data) => {
+    messageCount++;
+    if (messageCount > 50) {  // Adjust spike threshold
+      console.log(`🔥 KICK SPIKE DETECTED → ${username} (${messageCount} messages)! Triggering clip...`);
+      clipQueue.add("clip", {
+        platform: "kick",
+        streamerLogin: username,
+        title: `kick_spike_${Date.now()}`,
+        duration: 90,
+        spikeComments: messageCount,
+      });
+      messageCount = 0;
+    }
+  });
+
+  resetInterval = setInterval(() => { messageCount = 0; }, 30000);
+
+  console.log(`✅ Kick chat connected → Monitoring ${username}`);
 };
 
 export const stopKickMonitoring = () => {
-  if (kickChat) {
-    kickChat.disconnect();
-    kickChat = null;
-    console.log("Kick monitoring stopped");
+  if (kickConnection) {
+    kickConnection.disconnect();
+    kickConnection = null;
+    clearInterval(resetInterval);
+    console.log("🛑 Kick monitoring stopped");
   }
 };
