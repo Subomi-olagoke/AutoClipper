@@ -1,5 +1,6 @@
 // src/workers/kickChatWorker.js
-import { WebSocketConnection, MessageEvents } from "kick_live_ws";
+import pkg from 'kick_live_ws';
+const { WebSocketConnection, MessageEvents } = pkg;
 import { clipQueue } from "../jobs/clipQueue.js";
 
 let kickConnection = null;
