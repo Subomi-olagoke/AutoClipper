@@ -3,7 +3,7 @@ FROM node:22-bullseye
 
 # Install system dependencies
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+    apt-get install -y --no-install-recommends --fix-missing \
         ffmpeg \
         python3 \
         python3-pip \
